@@ -6,6 +6,8 @@ from request import RequestHandler
 from item import Item
 import errors
 
+from pprint import pprint
+
 class API:
 
     def __init__(self, config):
@@ -16,7 +18,7 @@ class API:
     def getItemsById(self, ids=[]):
         """Returns an item collection. Takes a list of ids as an argument."""
         ids = [str(x) for x in ids]
-        resp = self.request.get({"action":"wbgetitems", "ids": "|".join(ids)})
+        resp = self.request.get({"action":"wbgetentities", "ids": "|".join(ids)})
         items = self._createItemCollection(resp["entities"])
         return items
 
@@ -32,7 +34,7 @@ class API:
         else:
             sites = arg1
             titles = arg2
-        resp = self.request.get({"action":"wbgetitems", "sites": "|".join(sites), "titles": "|".join(titles)})
+        resp = self.request.get({"action":"wbgetentities", "sites": "|".join(sites), "titles": "|".join(titles)})
         items = self._createItemCollection(resp["entities"])
         return items
 
@@ -45,32 +47,21 @@ class API:
         if type(items) != list:
             items = [items]
         for item in items:
-            params = {"action":"wbsetitem", "clear": ""}
+            params = {"action":"wbsetitem"}
             if item.id:
                 params["id"] = item.id
             if comment:
                 params["summary"] = comment
             if self.config["botflag"]:
                 params["bot"] = "1"
-            data = {"sitelinks": item.sitelinks, "aliases": item.aliases, "labels": item.labels, "descriptions": item.descriptions}
-            for d in data:
-                data[d] = self._saveFormat(data[d], d)
-            params["data"] = json.dumps(data, ensure_ascii=False)
-            newdata = self.request.postWithToken(params)
-            self._createItem(newdata["entity"], item)
+            data = { "sitelinks": item.sitelinks.export(),
+                     "aliases": item.aliases.export(),
+                     "labels": item.labels.export(),
+                     "descriptions": item.descriptions.export()
+                   }
 
-    def _saveFormat(self, data, typ):
-        arr = []
-        vals = ["value","language"]
-        if typ == "sitelinks":
-            vals = ["title", "site"]
-        for d in data:
-            if typ == "aliases":
-                for value in data[d]:
-                    arr.append({vals[0]:value, vals[1]:d})
-            else:
-                arr.append({vals[0]:data[d], vals[1]:d})
-        return arr
+            params["data"] = json.dumps(data, ensure_ascii=False)
+            self.request.postWithToken(params)
 
     def _createItemCollection(self, data):
         items = []
@@ -113,5 +104,5 @@ class API:
             return target
         else:
             i = Item(sitelinks, aliases, labels, descriptions)
-            i.id = item["id"]
+            i.id = int(item["id"].replace("q",""))
             return i
